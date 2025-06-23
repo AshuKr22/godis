@@ -132,7 +132,7 @@ func readAndExecuteCommands() error {
 		command = strings.TrimSpace(command)
 		//execute all commands line by line
 		parser(command)
-		fmt.Println(scan_file.Text() + " executed successfully")
+		fmt.Println(command + " executed successfully")
 
 	}
 	return nil
@@ -158,10 +158,10 @@ func main() {
 	//read from the file and execute all commands before starting listening on tcp
 	err := readAndExecuteCommands()
 	if err != nil {
-		fmt.Printf("error occured while recovering data : %s", err)
+		fmt.Printf("error occurred while recovering data : %s", err)
 	}
 
-	//server listrning on 6379
+	//server listening on 6379
 	listener, err := net.Listen("tcp", "localhost:6379")
 	fmt.Println("⏳ session starting up")
 	if err != nil {
@@ -171,7 +171,7 @@ func main() {
 	}
 	defer listener.Close()
 	for {
-		//server accepting conncetions
+		//server accepting connections
 		conn, err := listener.Accept()
 		if err != nil {
 			fmt.Println(err.Error())
