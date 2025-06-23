@@ -6,22 +6,58 @@ import (
 	"net"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
+var DEFAULT_EXPIRATION_TIME time.Duration = time.Hour * 6
+
+type TimedValue struct {
+	expiry     time.Duration
+	value      string
+	time_stamp time.Time
+}
+
+func NewTimedValue(expiry time.Duration, value string) *TimedValue {
+	return &TimedValue{expiry: expiry, value: value, time_stamp: time.Now()}
+}
+
 var STORAGE sync.Map
-var COMMANDS = []string{"SET", "GET", "DEL"}
+var COMMANDS = []string{"SET", "GET", "DEL", "SETEX"}
 
 func handleSet(key string, value string) {
-	STORAGE.Store(key, value)
+	timed_value := NewTimedValue(DEFAULT_EXPIRATION_TIME, value)
+	STORAGE.Store(key, timed_value)
 }
 func handleGet(key string) (string, bool) {
-	value, ok := STORAGE.Load(key)
+	timed_value, ok := STORAGE.Load(key)
 	if !ok {
 		return "", ok
 	}
-	return value.(string), ok
+	//check if timed value
+	tv, ok := timed_value.(*TimedValue)
+	if !ok {
+		return "", ok
+	}
+	//subtract current time from time_stamp om object
+	ttl := time.Since(tv.time_stamp)
+	fmt.Printf("time since inception : %s", ttl)
+	if ttl > tv.expiry {
+		return "", false
+
+	}
+	//return actual value
+	return tv.value, ok
+
+}
+func handleSetEx(key string, value string, timeInSeconds string) {
+	//convert time string to seconds
+	timeInt, _ := strconv.Atoi(timeInSeconds)
+	time := time.Duration(timeInt) * time.Second
+	timed_value := NewTimedValue(time, value)
+	STORAGE.Store(key, timed_value)
 
 }
 func handleDel(key string) (string, bool) {
@@ -34,23 +70,26 @@ func handleDel(key string) (string, bool) {
 
 }
 
-func splitThree(s string) (a, b, c string) {
-	parts := strings.SplitN(s, " ", 3) // split **at most** 2 times → 3 parts
+func splitThree(s string) (a, b, c, d string) {
+	parts := strings.SplitN(s, " ", 4) // split **at most** 2 times → 3 parts
+	fmt.Println(parts)
 	switch len(parts) {
+	case 4:
+		return parts[0], parts[1], parts[2], parts[3]
 	case 3:
-		return parts[0], parts[1], parts[2]
-	case 2: // missing a third part
-		return parts[0], parts[1], ""
-	case 1: // nothing to split
-		return parts[0], "", ""
+		return parts[0], parts[1], parts[2], ""
+	case 2:
+		return parts[0], parts[1], "", ""
+	case 1:
+		return parts[0], "", "", ""
 	default:
-		return "", "", ""
+		return "", "", "", ""
 	}
 }
 
-func parser(input string) (string, error) {
+func parser(input string, is_recovering bool) (string, error) {
 	//divide input into three parts
-	command, key, value := splitThree(input)
+	command, key, value, time := splitThree(input)
 	//identify command , if invalid return error
 	if command == "" {
 		return "ERROR", fmt.Errorf("command not found ❌")
@@ -60,20 +99,28 @@ func parser(input string) (string, error) {
 	}
 	switch command {
 	case "SET":
-		//write commands to log before updating memory
-		writeToLogs(input)
-
+		if !is_recovering {
+			writeToLogs(input)
+		}
 		handleSet(key, value)
+		return "OK ✅", nil
+
+	case "SETEX":
+		if !is_recovering {
+			writeToLogs(input)
+		}
+		handleSetEx(key, value, time)
 		return "OK ✅", nil
 	case "GET":
 		value, ok := handleGet(key)
 		if !ok {
-			return "value not found ❌", nil
+			return "value not found or expired ❌", nil
 		}
 		return value, nil
 	case "DEL":
-		//write commands to log before updating memory
-		writeToLogs(input)
+		if !is_recovering {
+			writeToLogs(input)
+		}
 		old, ok := handleDel(key)
 		if !ok {
 			return "key not found ❌", nil
@@ -102,7 +149,7 @@ func handleConnection(conn net.Conn) {
 			//break the loop
 			break
 		}
-		output, err := parser(line)
+		output, err := parser(line, false)
 		if err != nil {
 			fmt.Println(err.Error())
 		}
@@ -142,7 +189,7 @@ func readAndExecuteCommands() error {
 		command = strings.TrimSpace(command)
 		//check valid command & execute
 		if !skipCommand(command) {
-			parser(command)
+			parser(command, true)
 		}
 		fmt.Println(command + " executed successfully")
 
