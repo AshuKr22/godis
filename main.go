@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"net"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -55,10 +56,13 @@ func parser(input string) (string, error) {
 		return "ERROR", fmt.Errorf("command not found ❌")
 	}
 	if !slices.Contains(COMMANDS, command) {
-		return "ERROR", fmt.Errorf("%s is not a valid command ❌ ", command)
+		return command + " is not a valid command ❌", fmt.Errorf("user entered an invalid command : %s ❌ ", command)
 	}
 	switch command {
 	case "SET":
+		//write commands to log before updating memory
+		writeToLogs(input)
+
 		handleSet(key, value)
 		return "OK ✅", nil
 	case "GET":
@@ -68,6 +72,8 @@ func parser(input string) (string, error) {
 		}
 		return value, nil
 	case "DEL":
+		//write commands to log before updating memory
+		writeToLogs(input)
 		old, ok := handleDel(key)
 		if !ok {
 			return "key not found ❌", nil
@@ -75,9 +81,6 @@ func parser(input string) (string, error) {
 		return old, nil
 	}
 	return "function end", nil
-
-	//identify key , if not found return error
-	//identify value , if not found return error
 }
 
 func handleConnection(conn net.Conn) {
@@ -102,7 +105,6 @@ func handleConnection(conn net.Conn) {
 		output, err := parser(line)
 		if err != nil {
 			fmt.Println(err.Error())
-			return
 		}
 
 		//write back to user
@@ -114,18 +116,67 @@ func handleConnection(conn net.Conn) {
 	}
 
 }
+func readAndExecuteCommands() error {
+	file, err := os.Open("log.txt")
+
+	if err != nil {
+		return err
+	}
+	//close file
+	defer file.Close()
+	scan_file := bufio.NewScanner(file)
+	//print log entries
+	fmt.Println("📊 printing log entries ... ")
+	for scan_file.Scan() {
+		command := scan_file.Text()
+		command = strings.TrimSpace(command)
+		//execute all commands line by line
+		parser(command)
+		fmt.Println(scan_file.Text() + " executed successfully")
+
+	}
+	return nil
+
+}
+func writeToLogs(command string) error {
+	file, err := os.OpenFile("log.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	//close file
+	defer file.Close()
+	buf_writer := bufio.NewWriter(file)
+	//write all the writes together at once in file once function ends
+	defer buf_writer.Flush()
+
+	fmt.Fprintln(buf_writer, command)
+
+	return nil
+
+}
 func main() {
+	//read from the file and execute all commands before starting listening on tcp
+	err := readAndExecuteCommands()
+	if err != nil {
+		fmt.Printf("error occured while recovering data : %s", err)
+	}
+
 	//server listrning on 6379
-	net, err := net.Listen("tcp", "localhost:6379")
+	listener, err := net.Listen("tcp", "localhost:6379")
+	fmt.Println("⏳ session starting up")
 	if err != nil {
 		// handle error
 		fmt.Printf("internal error occurred")
 		return
 	}
-	defer net.Close()
+	defer listener.Close()
 	for {
 		//server accepting conncetions
-		conn, _ := net.Accept()
+		conn, err := listener.Accept()
+		if err != nil {
+			fmt.Println(err.Error())
+			return
+		}
 
 		//added goroutine for multiple connections
 		go handleConnection(conn)
