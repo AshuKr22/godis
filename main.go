@@ -116,6 +116,16 @@ func handleConnection(conn net.Conn) {
 	}
 
 }
+func skipCommand(command string) bool {
+	// if empty command then skip
+	if command == "" {
+		return true
+	}
+	return false
+	//later add more conditions to check
+	//like end of line marker to make sure data/value is not malformed
+
+}
 func readAndExecuteCommands() error {
 	file, err := os.Open("log.txt")
 
@@ -130,8 +140,10 @@ func readAndExecuteCommands() error {
 	for scan_file.Scan() {
 		command := scan_file.Text()
 		command = strings.TrimSpace(command)
-		//execute all commands line by line
-		parser(command)
+		//check valid command & execute
+		if !skipCommand(command) {
+			parser(command)
+		}
 		fmt.Println(command + " executed successfully")
 
 	}
