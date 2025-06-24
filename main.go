@@ -54,7 +54,11 @@ func handleGet(key string) (string, bool) {
 }
 func handleSetEx(key string, value string, timeInSeconds string) {
 	//convert time string to seconds
-	timeInt, _ := strconv.Atoi(timeInSeconds)
+	timeInt, err := strconv.Atoi(timeInSeconds)
+	if err != nil {
+		fmt.Println("error converting string to int")
+		return
+	}
 	time := time.Duration(timeInt) * time.Second
 	timed_value := NewTimedValue(time, value)
 	STORAGE.Store(key, timed_value)
@@ -62,11 +66,17 @@ func handleSetEx(key string, value string, timeInSeconds string) {
 }
 func handleDel(key string) (string, bool) {
 
-	old, ok := STORAGE.LoadAndDelete(key)
+	oldTimedValue, ok := STORAGE.LoadAndDelete(key)
+
 	if !ok {
 		return "", false
 	}
-	return old.(string), ok
+	old, ok := oldTimedValue.(*TimedValue)
+	if !ok {
+		return "", false
+	}
+
+	return old.value, ok
 
 }
 
@@ -170,7 +180,6 @@ func skipCommand(command string) bool {
 	}
 	return false
 	//later add more conditions to check
-	//like end of line marker to make sure data/value is not malformed
 
 }
 func readAndExecuteCommands() error {
