@@ -230,7 +230,7 @@ func main() {
 	}
 
 	//server listening on 6379
-	listener, err := net.Listen("tcp", "localhost:6379")
+	listener, err := net.Listen("tcp", ":6379")
 	fmt.Println("⏳ session starting up")
 	if err != nil {
 		// handle error
