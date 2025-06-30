@@ -1,11 +1,38 @@
-services:
-  godis:
-    build: .
-    ports:
-      - "6379:6379"
-    volumes:
-      - godis-data:/data
-    restart: unless-stopped
+version: "3.8"
 
-volumes:
-  godis-data:
+services:
+  godis1:
+    build: .
+    environment:
+      - INSTANCE_ID=godis1
+    networks: [godis-net]
+    expose: ["6379"]        # <─ only inside the network
+
+  godis2:
+    build: .
+    environment:
+      - INSTANCE_ID=godis2
+    networks: [godis-net]
+    expose: ["6379"]
+
+  godis3:
+    build: .
+    environment:
+      - INSTANCE_ID=godis3
+    networks: [godis-net]
+    expose: ["6379"]
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "6379:6379"         # <─ clients connect here
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - godis1
+      - godis2
+      - godis3
+    networks: [godis-net]
+
+networks:
+  godis-net:

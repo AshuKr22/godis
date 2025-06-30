@@ -141,9 +141,11 @@ func parser(input string, is_recovering bool) (string, error) {
 }
 
 func handleConnection(conn net.Conn) {
+
 	//defer conn.close
 	defer conn.Close()
 	conn.Write([]byte("go-redis initiated 🚀\n"))
+	conn.Write([]byte("go-redis initiated 🚀 from " + os.Getenv("INSTANCE_ID") + "\n"))
 	//reading user input wrapped in buffer on connection ? can i use anything else
 	scanner := bufio.NewScanner(conn)
 	//while input exists , we keep readings
@@ -223,6 +225,8 @@ func writeToLogs(command string) error {
 
 }
 func main() {
+	instanceID := os.Getenv("INSTANCE_ID")
+	fmt.Printf("🚀 starting instance %s\n", instanceID)
 	//read from the file and execute all commands before starting listening on tcp
 	err := readAndExecuteCommands()
 	if err != nil {
